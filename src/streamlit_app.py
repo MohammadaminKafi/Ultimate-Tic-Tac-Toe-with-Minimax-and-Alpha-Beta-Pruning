@@ -1,5 +1,12 @@
 import streamlit as st
 import time
+import random
+
+# -- Workaround for older Streamlit versions that lack st.experimental_rerun() --
+def rerun():
+    """Force a fresh rerun by changing a query param."""
+    st.experimental_set_query_params(rerun=str(random.randint(0, 9999999)))
+    st.stop()
 
 # Import your existing modules (same as in the original project)
 from tables import uttt_table
@@ -9,7 +16,7 @@ from ai import minimax_alphaBetaPrunning
 st.set_page_config(page_title="Ultimate Tic-Tac-Toe", layout="centered")
 
 # 2) -------------- INITIALIZE SESSION STATE -----------
-# We store the board and basic turn/game info in session_state (no widgets).
+# We store the board, current turn, and game_over in session_state (no widget keys).
 if 'board' not in st.session_state:
     st.session_state.board = uttt_table()  # The main Ultimate Tic-Tac-Toe board
 if 'player_turn' not in st.session_state:
@@ -29,10 +36,10 @@ def handle_human_move(i, j):
     if st.session_state.game_over:
         return
 
-    subtable_x = i // 3  # Which subtable row
-    subtable_y = j // 3  # Which subtable col
-    cell_x = i % 3       # Which cell inside subtable row
-    cell_y = j % 3       # Which cell inside subtable col
+    subtable_x = i // 3  # which subtable row
+    subtable_y = j // 3  # which subtable col
+    cell_x = i % 3       # which cell inside subtable row
+    cell_y = j % 3       # which cell inside subtable col
 
     current_board = st.session_state.board
     turn = st.session_state.player_turn
@@ -57,6 +64,7 @@ def handle_ai_move():
     turn = st.session_state.player_turn
 
     # Decide which depth to use, based on the current player
+    # (Read directly from st.session_state, which is set by the slider widget)
     if turn == 'X':
         depth = st.session_state.ai_depth_player1
     else:
@@ -66,11 +74,9 @@ def handle_ai_move():
     elapsed_time, best_move, alpha, beta = minimax_alphaBetaPrunning(
         current_board, turn, depth
     )
-
-    # best_move is typically [subtable_x, subtable_y, cell_x, cell_y]
     sub_x, sub_y, cell_x, cell_y = best_move
 
-    # Convert that to the same "pos" style logic
+    # Convert that to row/col for handle_human_move
     handle_human_move(sub_x * 3 + cell_x, sub_y * 3 + cell_y)
 
 
@@ -99,13 +105,14 @@ def restart_game():
 # 4) ------------- BUILD THE SIDEBAR UI ----------------
 st.sidebar.header("Game Settings")
 
-# Player type selectboxes — we let these define session_state keys directly:
+# Player type selectboxes — let these define session_state keys, no manual assignment
 st.sidebar.selectbox(
     "Player 1 (X)",
     ("Human", "AI"),
     index=0,
     key="player1_type"
 )
+
 st.sidebar.selectbox(
     "Player 2 (O)",
     ("Human", "AI"),
@@ -113,7 +120,8 @@ st.sidebar.selectbox(
     key="player2_type"
 )
 
-# AI Depth Sliders — again, each slider sets a session_state key and default:
+# AI Depth Sliders — each slider sets session_state internally.
+# We'll just read from it. We do *not* do st.session_state[...] = st.sidebar.slider(...)
 st.sidebar.subheader("AI Depth Settings")
 st.sidebar.slider(
     "AI Depth for Player X",
@@ -135,7 +143,7 @@ st.sidebar.slider(
 # Restart Button
 if st.sidebar.button("Restart Game"):
     restart_game()
-    st.experimental_rerun()
+    rerun()  # triggers a full rerun immediately
 
 # 5) ------------- MAIN LAYOUT ---------------------
 st.title("Ultimate Tic-Tac-Toe (Streamlit Version)")
@@ -152,11 +160,8 @@ for i in range(9):
         cell_y = j % 3
 
         cell_value = current_board.subtable[subtable_x][subtable_y].table[cell_x][cell_y]
-
-        # Create a label for the cell
         label = str(cell_value) if cell_value != 0 else " "
 
-        # Make a clickable button if the cell is empty
         clicked = cols[j].button(
             label,
             key=f"cell_{i}_{j}",
@@ -164,17 +169,18 @@ for i in range(9):
         )
 
         if clicked:
+            # If the user clicked this cell, handle the move if it's empty
             if not st.session_state.game_over and cell_value == 0:
                 handle_human_move(i, j)
-                st.experimental_rerun()
+                rerun()  # rerun after the move to update the board/AI
 
-# After the user potentially made a move, check if the game is over:
+# After the user (or AI) might have moved, check if the game is over
 check_game_over()
 
-# If not over and it's AI's turn, automatically make the AI move:
+# If not over and it's AI's turn, make the AI move automatically
 if not st.session_state.game_over:
     turn = st.session_state.player_turn
     if (turn == 'X' and st.session_state.player1_type == "AI") or \
        (turn == 'O' and st.session_state.player2_type == "AI"):
         handle_ai_move()
-        st.experimental_rerun()
+        rerun()  # rerun after AI move to refresh board
