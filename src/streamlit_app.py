@@ -2,8 +2,8 @@ import streamlit as st
 import time
 
 # Import your existing modules (same as in the original project)
-from src.tables import uttt_table
-from src.ai import minimax_alphaBetaPrunning
+from tables import uttt_table
+from ai import minimax_alphaBetaPrunning
 
 # 1) -------------- STREAMLIT PAGE CONFIG --------------
 st.set_page_config(page_title="Ultimate Tic-Tac-Toe", layout="centered")
