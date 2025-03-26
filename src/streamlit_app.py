@@ -9,24 +9,13 @@ from ai import minimax_alphaBetaPrunning
 st.set_page_config(page_title="Ultimate Tic-Tac-Toe", layout="centered")
 
 # 2) -------------- INITIALIZE SESSION STATE -----------
-# We store the game state and user settings in Streamlit's session_state
+# We store the board and basic turn/game info in session_state (no widgets).
 if 'board' not in st.session_state:
     st.session_state.board = uttt_table()  # The main Ultimate Tic-Tac-Toe board
 if 'player_turn' not in st.session_state:
     st.session_state.player_turn = 'X'     # 'X' always goes first
 if 'game_over' not in st.session_state:
     st.session_state.game_over = False
-
-# Default: both players set to "Human"; AI depths
-if 'player1_type' not in st.session_state:
-    st.session_state.player1_type = "Human"
-if 'player2_type' not in st.session_state:
-    st.session_state.player2_type = "Human"
-if 'ai_depth_player1' not in st.session_state:
-    st.session_state.ai_depth_player1 = 3
-if 'ai_depth_player2' not in st.session_state:
-    st.session_state.ai_depth_player2 = 3
-
 
 # 3) -------------- HELPER FUNCTIONS --------------------
 
@@ -35,27 +24,21 @@ def handle_human_move(i, j):
     Convert the clicked cell (i, j) into:
       - subtable_x, subtable_y
       - cell_x, cell_y
-    and attempt the move.
+    and attempt the move on st.session_state.board.
     """
     if st.session_state.game_over:
         return
 
-    subtable_x = i // 3  # which subtable row
-    subtable_y = j // 3  # which subtable col
-    cell_x = i % 3       # which cell inside subtable row
-    cell_y = j % 3       # which cell inside subtable col
+    subtable_x = i // 3  # Which subtable row
+    subtable_y = j // 3  # Which subtable col
+    cell_x = i % 3       # Which cell inside subtable row
+    cell_y = j % 3       # Which cell inside subtable col
 
     current_board = st.session_state.board
     turn = st.session_state.player_turn
 
     try:
-        current_board.make_move(
-            subtable_x,
-            subtable_y,
-            cell_x,
-            cell_y,
-            turn
-        )
+        current_board.make_move(subtable_x, subtable_y, cell_x, cell_y, turn)
         # Switch player
         st.session_state.player_turn = 'O' if turn == 'X' else 'X'
     except Exception as e:
@@ -64,7 +47,8 @@ def handle_human_move(i, j):
 
 def handle_ai_move():
     """
-    Have the AI (Minimax + Alpha-Beta) choose and execute a move for the current player.
+    Have the AI (Minimax + Alpha-Beta) choose and execute a move 
+    for the current player, given the appropriate depth.
     """
     if st.session_state.game_over:
         return
@@ -105,7 +89,7 @@ def check_game_over():
 
 def restart_game():
     """
-    Clear out all session state for a fresh start.
+    Clear out all relevant session state for a fresh start.
     """
     st.session_state.board = uttt_table()
     st.session_state.player_turn = 'X'
@@ -115,37 +99,37 @@ def restart_game():
 # 4) ------------- BUILD THE SIDEBAR UI ----------------
 st.sidebar.header("Game Settings")
 
-# Player 1 type
-player1_type = st.sidebar.selectbox(
+# Player type selectboxes — we let these define session_state keys directly:
+st.sidebar.selectbox(
     "Player 1 (X)",
     ("Human", "AI"),
     index=0,
-    key='player1_type'
+    key="player1_type"
 )
-
-# Player 2 type
-player2_type = st.sidebar.selectbox(
+st.sidebar.selectbox(
     "Player 2 (O)",
     ("Human", "AI"),
     index=0,
-    key='player2_type'
+    key="player2_type"
 )
 
-# AI Depth Sliders
+# AI Depth Sliders — again, each slider sets a session_state key and default:
 st.sidebar.subheader("AI Depth Settings")
-st.session_state.ai_depth_player1 = st.sidebar.slider(
+st.sidebar.slider(
     "AI Depth for Player X",
-    min_value=1, max_value=10,
-    value=st.session_state.ai_depth_player1,
+    min_value=1,
+    max_value=10,
+    value=3,
     step=1,
-    key='ai_depth_player1'
+    key="ai_depth_player1"
 )
-st.session_state.ai_depth_player2 = st.sidebar.slider(
+st.sidebar.slider(
     "AI Depth for Player O",
-    min_value=1, max_value=10,
-    value=st.session_state.ai_depth_player2,
+    min_value=1,
+    max_value=10,
+    value=3,
     step=1,
-    key='ai_depth_player2'
+    key="ai_depth_player2"
 )
 
 # Restart Button
@@ -153,19 +137,14 @@ if st.sidebar.button("Restart Game"):
     restart_game()
     st.experimental_rerun()
 
+# 5) ------------- MAIN LAYOUT ---------------------
 st.title("Ultimate Tic-Tac-Toe (Streamlit Version)")
-
-# 5) ------------- RENDER THE BOARD ---------------------
-# We will create a 9x9 "grid" of buttons or placeholders
-# Each small cell belongs to a sub-board.
-#
-# The sub-boards are 3x3 of 3x3 cells = total 9x9 cells.
 
 current_board = st.session_state.board
 
-# Draw row by row
+# Render a 9x9 grid of cells. Each small cell is subtable_x,y, cell_x,y.
 for i in range(9):
-    cols = st.columns(9)  # 9 columns in the row
+    cols = st.columns(9)
     for j in range(9):
         subtable_x = i // 3
         subtable_y = j // 3
@@ -174,43 +153,28 @@ for i in range(9):
 
         cell_value = current_board.subtable[subtable_x][subtable_y].table[cell_x][cell_y]
 
-        # Make a label for the cell
-        if cell_value == 0:
-            label = " "  # Empty
-        else:
-            label = str(cell_value)
+        # Create a label for the cell
+        label = str(cell_value) if cell_value != 0 else " "
 
-        # Highlight subtable if needed
-        subtable_required = current_board.subtable_to_be_played
-        highlight = False
-        if subtable_required != [None, None]:
-            # highlight the required subtable
-            if subtable_x == subtable_required[0] and subtable_y == subtable_required[1]:
-                highlight = True
-
-        # We can use st.button or st.write with Markdown (for coloring).
-        # For simplicity, we just show a button. If it's clicked and empty => handle move.
-        button_clicked = cols[j].button(
+        # Make a clickable button if the cell is empty
+        clicked = cols[j].button(
             label,
             key=f"cell_{i}_{j}",
-            help=f"Subtable ({subtable_x},{subtable_y}), Cell ({cell_x},{cell_y})",
-            # You can attempt some styling or just rely on default
+            help=f"Subtable ({subtable_x},{subtable_y}), Cell ({cell_x},{cell_y})"
         )
 
-        if button_clicked:
-            # If this cell is empty and it's not game over, let the human move
+        if clicked:
             if not st.session_state.game_over and cell_value == 0:
                 handle_human_move(i, j)
                 st.experimental_rerun()
 
-# After the board is rendered, let’s see if we need an AI move.
-# If it’s AI’s turn, handle it automatically.
+# After the user potentially made a move, check if the game is over:
+check_game_over()
+
+# If not over and it's AI's turn, automatically make the AI move:
 if not st.session_state.game_over:
     turn = st.session_state.player_turn
     if (turn == 'X' and st.session_state.player1_type == "AI") or \
        (turn == 'O' and st.session_state.player2_type == "AI"):
         handle_ai_move()
         st.experimental_rerun()
-
-# Check if the game ended after a move
-check_game_over()
